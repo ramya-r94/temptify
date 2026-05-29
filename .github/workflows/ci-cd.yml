@@ -1,0 +1,47 @@
+name: CI-CD Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v0.1.10
+
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+
+          script: |
+            # Clone repo if not exists
+            if [ ! -d "tempify" ]; then
+              git clone https://github.com/ramya-r94/tempify.git
+            fi
+
+            cd tempify
+
+            # Pull latest code
+            git pull origin main
+
+            # Stop nginx/apache if running
+            sudo systemctl stop nginx || true
+            sudo systemctl stop httpd || true
+
+            # Stop and remove old container
+            docker stop tempify-container || true
+            docker rm tempify-container || true
+
+            # Remove old image
+            docker rmi tempify-image || true
+
+            # Build Docker image
+            docker build -t tempify-image .
+
+            # Run new container
+            docker run -d -p 80:80 --name tempify-container tempify-image
